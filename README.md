@@ -121,6 +121,8 @@ Verified ROS2 result on Raspberry Pi:
 - `/cmd_vel` subscription appeared
 - `/driver_state` published `drive left=350 right=350 reason=drive`
 - stale command watchdog published `stop reason=watchdog_timeout`
+- direct driver shutdown left no `altino`/`ros2`/daemon processes behind
+- a ROS2 speed sweep mapped `linear.x` values `0.15`, `0.20`, `0.25`, `0.30`, and `0.35` to wheel speeds `150`, `200`, `250`, `300`, and `350`, with watchdog stop after each command
 
 The default `wheel_base_m` and `max_linear_mps` values are placeholders for safe bring-up. Calibrate them on the physical Altino before using the values as odometry or navigation evidence.
 

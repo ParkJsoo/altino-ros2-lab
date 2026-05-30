@@ -100,6 +100,21 @@ Observed on 2026-05-30:
 - `/cmd_vel` had one subscriber
 - `/driver_state` reported `drive left=350 right=350 reason=drive`
 - watchdog then reported `stop reason=watchdog_timeout`
+- direct driver shutdown left no `altino`/`ros2`/daemon processes behind
+
+ROS2 speed sweep observed on 2026-05-30 with `cmd_timeout_s:=1.0`:
+
+```text
+linear.x=0.15 -> drive left=150 right=150 -> stop reason=watchdog_timeout
+linear.x=0.20 -> drive left=200 right=200 -> stop reason=watchdog_timeout
+linear.x=0.25 -> drive left=250 right=250 -> stop reason=watchdog_timeout
+linear.x=0.30 -> drive left=300 right=300 -> stop reason=watchdog_timeout
+linear.x=0.35 -> drive left=350 right=350 -> stop reason=watchdog_timeout
+```
+
+This confirms the ROS2-to-driver mapping and watchdog behavior. Record operator
+observation separately before treating any value below `0.35` as a reliable
+physical movement threshold.
 
 ## Stop Conditions
 
