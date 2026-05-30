@@ -124,6 +124,7 @@ Verified ROS2 result on Raspberry Pi:
 - direct driver shutdown left no `altino`/`ros2`/daemon processes behind
 - a ROS2 speed sweep mapped `linear.x` values `0.15`, `0.20`, `0.25`, `0.30`, and `0.35` to wheel speeds `150`, `200`, `250`, `300`, and `350`, with watchdog stop after each command
 - operator observation confirmed visible physical movement at `linear.x=0.30` and `linear.x=0.35`; lower values are not yet confirmed as reliable movement thresholds
+- a ROS2 arc sweep at `linear.x=0.30` mapped `angular.z=+0.50` to `left=270 right=330` and `angular.z=-0.50` to `left=330 right=270`, with watchdog stop after each command; physical left/right direction observation is still pending
 
 The default `wheel_base_m` and `max_linear_mps` values are placeholders for safe bring-up. Calibrate them on the physical Altino before using the values as odometry or navigation evidence.
 

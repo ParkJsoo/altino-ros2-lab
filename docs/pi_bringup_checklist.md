@@ -117,6 +117,18 @@ observation from the same run: visible physical movement was observed at
 `linear.x=0.30` and `linear.x=0.35`; movement below `0.30` is not yet confirmed
 as a reliable physical threshold.
 
+ROS2 arc sweep observed on 2026-05-30 with `linear.x=0.30`,
+`cmd_timeout_s:=1.0`, and `wheel_base_m=0.12`:
+
+```text
+angular.z=+0.50 -> drive left=270 right=330 -> stop reason=watchdog_timeout
+angular.z=-0.50 -> drive left=330 right=270 -> stop reason=watchdog_timeout
+```
+
+This confirms differential wheel mapping for forward arc commands. Record
+operator observation separately before treating the sign of `angular.z` as
+physically verified for left/right turns.
+
 ## Stop Conditions
 
 Stop and investigate if any of these happen:
