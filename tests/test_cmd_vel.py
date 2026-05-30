@@ -18,6 +18,12 @@ class CmdVelTest(unittest.TestCase):
         self.assertEqual(command.left, 50)
         self.assertEqual(command.right, 50)
 
+    def test_default_stable_forward_speed_maps_to_verified_threshold(self) -> None:
+        command = cmd_vel_to_drive(0.30, 0.0)
+        self.assertFalse(command.should_stop)
+        self.assertEqual(command.reason, "drive")
+        self.assertEqual((command.left, command.right), (300, 300))
+
     def test_positive_angular_command_maps_to_left_steer_drive(self) -> None:
         command = cmd_vel_to_drive(
             0.5,

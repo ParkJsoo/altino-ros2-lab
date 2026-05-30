@@ -128,10 +128,11 @@ Verified ROS2 result on Raspberry Pi:
 - stale command watchdog published `stop reason=watchdog_timeout`
 - direct driver shutdown left no `altino`/`ros2`/daemon processes behind
 - a ROS2 speed sweep mapped `linear.x` values `0.15`, `0.20`, `0.25`, `0.30`, and `0.35` to wheel speeds `150`, `200`, `250`, `300`, and `350`, with watchdog stop after each command
-- operator observation confirmed visible physical movement at `linear.x=0.30` and `linear.x=0.35`; lower values are not yet confirmed as reliable movement thresholds
+- 2026-05-31 repeat tests confirmed `linear.x=0.26` as borderline movement and `linear.x=0.30` as the first stable forward motion threshold
 - differential motor tests (`left=0 right=350`, `left=350 right=0`) still drove straight, so the earlier differential turn model is invalid for this Altino BLE path
 - direct steering-byte tests with `steering=1`, `2`, `3`, `127`, and `255` did not produce a reliable physical turn; `127/255` caused visible steering hunting
 - Android app left/right BLE packets were decoded and physically verified from the Pi driver: `0x80/0x04` steers left, `0x7f/0x08` steers right, and stop/center frames recenter the steering
+- ROS2 angular tests at `linear.x=0.30` physically produced clear left and right steering with similar turn ratio
 
 The default `max_linear_mps` value is a placeholder for safe bring-up. Angular
 commands currently select discrete left/right steering, not calibrated

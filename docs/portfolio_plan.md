@@ -55,11 +55,13 @@ Verified on Raspberry Pi:
 - `/cmd_vel` publish at `linear.x=0.35` produced `drive left=350 right=350`.
 - Watchdog published `stop reason=watchdog_timeout`.
 - Android-captured steering frames were physically verified from the Pi driver: left/right steering, center return, and left/right drive steering worked.
+- Speed calibration found `linear.x=0.26` borderline and `linear.x=0.30` stable for forward motion.
+- ROS2 angular commands at `linear.x=0.30` produced clear left and right steering with similar turn ratio.
 
 Recommended next step:
 
-- Pull the verified steering implementation onto the Pi and run a short ROS2 angular `/cmd_vel` smoke test.
-- Tune `max_linear_mps`, low-speed threshold, and steering response before odometry work.
+- Keep `linear.x=0.30` as the stable bring-up speed and avoid claiming calibrated curvature until odometry exists.
+- Add sensor/odometry evidence before navigation work.
 
 ## Phase 4: Sensors
 

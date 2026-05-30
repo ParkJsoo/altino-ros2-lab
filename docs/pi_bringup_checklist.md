@@ -116,18 +116,19 @@ linear.x=0.30 -> drive left=300 right=300 -> stop reason=watchdog_timeout
 linear.x=0.35 -> drive left=350 right=350 -> stop reason=watchdog_timeout
 ```
 
-This confirms the ROS2-to-driver mapping and watchdog behavior. Operator
-observation from the same run: visible physical movement was observed at
-`linear.x=0.30` and `linear.x=0.35`; movement below `0.30` is not yet confirmed
-as a reliable physical threshold.
+This confirms the ROS2-to-driver mapping and watchdog behavior.
 
-ROS2 arc sweep observed on 2026-05-30 with `linear.x=0.30`,
-`cmd_timeout_s:=1.0`, and `wheel_base_m=0.12`:
+Low-speed repeat tests on 2026-05-31:
 
 ```text
-angular.z=+0.50 -> drive left=270 right=330 -> stop reason=watchdog_timeout
-angular.z=-0.50 -> drive left=330 right=270 -> stop reason=watchdog_timeout
+linear.x=0.18 -> drive left=180 right=180 -> no reliable visible movement
+linear.x=0.22 -> drive left=220 right=220 -> no reliable visible movement
+linear.x=0.26 -> drive left=260 right=260 -> moved in 2 of 3 repeat trials
+linear.x=0.30 -> drive left=300 right=300 -> moved in 3 of 3 repeat trials
 ```
+
+Use `linear.x=0.30` as the first stable forward motion threshold for bring-up.
+Treat `linear.x=0.26` as a borderline diagnostic value, not a reliable default.
 
 Follow-up direct motor differential tests on 2026-05-30:
 
@@ -163,6 +164,16 @@ Physical verification on 2026-05-31 from the Pi driver:
 These are available through `python3 -m altino.cli steer left|right|center`.
 ROS2 angular `/cmd_vel` now maps to these discrete steering states: positive is
 left, negative is right. Angular magnitude is not calibrated as curvature yet.
+
+ROS2 steering verification on 2026-05-31 with `linear.x=0.30`:
+
+```text
+angular.z=+0.50 -> steer direction=left speed=300 -> physically clear left turn
+angular.z=-0.50 -> steer direction=right speed=300 -> physically clear right turn
+```
+
+Operator observation: left and right turns were similar enough that the robot
+returned close to its starting pose after the left/right pair.
 
 ## Stop Conditions
 

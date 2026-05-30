@@ -6,8 +6,10 @@ altino_driver:
     name_hint: "ALTINO"
     scan_seconds: 8.0
 
-    # Bring-up placeholders. Angular commands use verified discrete Android
-    # steering states; angular magnitude is not calibrated as curvature yet.
+    # Calibrated bring-up values. On 2026-05-31, linear.x=0.26 was borderline
+    # and linear.x=0.30 was the first stable forward motion threshold.
+    # Angular commands use verified discrete Android steering states; angular
+    # magnitude is not calibrated as curvature yet.
     wheel_base_m: 0.12
     max_linear_mps: 0.35
 
