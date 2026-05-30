@@ -112,9 +112,10 @@ linear.x=0.30 -> drive left=300 right=300 -> stop reason=watchdog_timeout
 linear.x=0.35 -> drive left=350 right=350 -> stop reason=watchdog_timeout
 ```
 
-This confirms the ROS2-to-driver mapping and watchdog behavior. Record operator
-observation separately before treating any value below `0.35` as a reliable
-physical movement threshold.
+This confirms the ROS2-to-driver mapping and watchdog behavior. Operator
+observation from the same run: visible physical movement was observed at
+`linear.x=0.30` and `linear.x=0.35`; movement below `0.30` is not yet confirmed
+as a reliable physical threshold.
 
 ## Stop Conditions
 
