@@ -39,7 +39,7 @@ swift tools/altino_ble_write.swift drive 200 200 1.0
 swift tools/altino_ble_write.swift stop
 ```
 
-The Swift CLI keeps movement conservative: forward-only wheel speeds `0...350`, drive duration `0.05...3.00` seconds, and automatic stop burst after every drive command.
+The Swift CLI keeps movement conservative: forward-only motor values `0...350`, drive duration `0.05...3.00` seconds, and automatic stop burst after every drive command.
 
 ## Python/Pi CLI
 
@@ -69,6 +69,7 @@ python3 -m altino.cli scan
 python3 -m altino.cli light on
 python3 -m altino.cli horn on
 python3 -m altino.cli drive 200 200 1.0
+python3 -m altino.cli steer left 300 1.0
 python3 -m altino.cli stop
 ```
 
@@ -79,6 +80,9 @@ Pi hardware verification on 2026-05-30:
 - horn worked
 - `drive 350 350 2.0` produced visible forward movement
 - lower direct-drive tests at `120` and `250` were not visually obvious
+- Android Orchestra steering capture found turn frames that were physically verified from the Pi on 2026-05-31:
+  - left: `byte5=0x80`, equal motor fields, `byte20=0x04`
+  - right: `byte5=0x7f`, equal motor fields, `byte20=0x08`
 
 ## Tests
 
@@ -86,7 +90,7 @@ Pi hardware verification on 2026-05-30:
 python3 -m unittest discover -s tests
 ```
 
-The tests cover known stop/light frames, checksum behavior, Android chunking, motor byte order, `/cmd_vel` mapping, and current forward-only safety limits.
+The tests cover known stop/light frames, checksum behavior, Android chunking, motor byte order, verified steering frames, `/cmd_vel` mapping, and safety limits.
 
 ## ROS2 Bridge Foundation
 
@@ -112,8 +116,9 @@ Node behavior:
 
 - subscribes to `/cmd_vel`
 - publishes text status on `/driver_state`
-- converts forward `/cmd_vel` commands into left/right wheel speeds
-- rejects reverse and pivot commands until negative wheel behavior is physically verified
+- converts straight forward `/cmd_vel` commands into equal motor speeds
+- maps positive `angular.z` to verified left steering frames and negative `angular.z` to verified right steering frames
+- rejects reverse commands until reverse behavior is physically verified
 - sends stop on zero command and stale command watchdog timeout
 
 Verified ROS2 result on Raspberry Pi:
@@ -124,8 +129,13 @@ Verified ROS2 result on Raspberry Pi:
 - direct driver shutdown left no `altino`/`ros2`/daemon processes behind
 - a ROS2 speed sweep mapped `linear.x` values `0.15`, `0.20`, `0.25`, `0.30`, and `0.35` to wheel speeds `150`, `200`, `250`, `300`, and `350`, with watchdog stop after each command
 - operator observation confirmed visible physical movement at `linear.x=0.30` and `linear.x=0.35`; lower values are not yet confirmed as reliable movement thresholds
-- a ROS2 arc sweep at `linear.x=0.30` mapped `angular.z=+0.50` to `left=270 right=330` and `angular.z=-0.50` to `left=330 right=270`, with watchdog stop after each command; physical left/right direction observation is still pending
+- differential motor tests (`left=0 right=350`, `left=350 right=0`) still drove straight, so the earlier differential turn model is invalid for this Altino BLE path
+- direct steering-byte tests with `steering=1`, `2`, `3`, `127`, and `255` did not produce a reliable physical turn; `127/255` caused visible steering hunting
+- Android app left/right BLE packets were decoded and physically verified from the Pi driver: `0x80/0x04` steers left, `0x7f/0x08` steers right, and stop/center frames recenter the steering
 
-The default `wheel_base_m` and `max_linear_mps` values are placeholders for safe bring-up. Calibrate them on the physical Altino before using the values as odometry or navigation evidence.
+The default `max_linear_mps` value is a placeholder for safe bring-up. Angular
+commands currently select discrete left/right steering, not calibrated
+curvature. Do not claim odometry or navigation behavior until wheel response is
+calibrated.
 
 Pi hardware steps are in `docs/pi_bringup_checklist.md`. Do not run them while another session is using the same Pi for MotionBrain.

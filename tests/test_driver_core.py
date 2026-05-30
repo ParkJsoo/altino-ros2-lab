@@ -21,7 +21,7 @@ class DriverCoreTest(unittest.TestCase):
         self.assertFalse(core.stopped)
         self.assertEqual(transport.commands[-1].action, "drive")
 
-    def test_forward_turn_sends_differential_drive(self) -> None:
+    def test_angular_cmd_vel_sends_verified_steering_frame(self) -> None:
         transport = RecordingTransport()
         core = AltinoDriverCore(
             transport,
@@ -32,9 +32,28 @@ class DriverCoreTest(unittest.TestCase):
 
         event = core.handle_cmd_vel(0.5, 1.0, now=10.0)
 
-        self.assertEqual(event.action, "drive")
-        self.assertEqual((event.left, event.right), (88, 262))
-        self.assertEqual((transport.commands[-1].left, transport.commands[-1].right), (88, 262))
+        self.assertEqual(event.action, "steer")
+        self.assertTrue(event.accepted)
+        self.assertEqual(event.reason, "steer_drive")
+        self.assertEqual(event.steering, "left")
+        self.assertEqual((event.left, event.right), (175, 175))
+        self.assertEqual(transport.commands[-1].action, "steer")
+        self.assertEqual(transport.commands[-1].steering, "left")
+
+    def test_pivot_cmd_vel_sends_stationary_steering_frame(self) -> None:
+        transport = RecordingTransport()
+        core = AltinoDriverCore(transport)
+
+        event = core.handle_cmd_vel(0.0, -1.0, now=10.0)
+
+        self.assertEqual(event.action, "steer")
+        self.assertTrue(event.accepted)
+        self.assertEqual(event.reason, "steer_only")
+        self.assertEqual(event.steering, "right")
+        self.assertEqual((event.left, event.right), (0, 0))
+        self.assertFalse(core.stopped)
+        self.assertEqual(transport.commands[-1].action, "steer")
+        self.assertEqual(transport.commands[-1].steering, "right")
 
     def test_zero_cmd_vel_sends_stop(self) -> None:
         transport = RecordingTransport()
@@ -55,7 +74,7 @@ class DriverCoreTest(unittest.TestCase):
 
         self.assertEqual(event.action, "stop")
         self.assertFalse(event.accepted)
-        self.assertEqual(event.reason, "reverse_or_pivot_not_verified")
+        self.assertEqual(event.reason, "reverse_not_verified")
         self.assertEqual(transport.commands[-1].action, "stop")
 
     def test_watchdog_stops_once_after_timeout(self) -> None:

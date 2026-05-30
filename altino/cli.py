@@ -15,8 +15,10 @@ from .protocol import (
     hex_frame,
     horn_frame,
     light_frame,
+    steering_frame,
     stop_frame,
     validate_drive,
+    validate_steering_drive,
 )
 
 
@@ -59,10 +61,15 @@ def build_parser() -> argparse.ArgumentParser:
     horn = sub.add_parser("horn", help="turn horn on or off")
     horn.add_argument("state", choices=["on", "off"])
 
-    drive = sub.add_parser("drive", help="drive with safe forward-only wheel speeds")
+    drive = sub.add_parser("drive", help="drive with safe forward-only motor values")
     drive.add_argument("left", type=int)
     drive.add_argument("right", type=int)
     drive.add_argument("seconds", type=float)
+
+    steer = sub.add_parser("steer", help="send verified Android steering command")
+    steer.add_argument("direction", choices=["left", "right", "center"])
+    steer.add_argument("speed", nargs="?", type=int, default=0)
+    steer.add_argument("seconds", nargs="?", type=float, default=1.0)
 
     sub.add_parser("stop", help="send a stop burst")
     return parser
@@ -80,6 +87,9 @@ def frame_for_args(args: argparse.Namespace) -> bytes | None:
     if args.command == "drive":
         validate_drive(args.left, args.right, args.seconds)
         return drive_frame(args.left, args.right)
+    if args.command == "steer":
+        validate_steering_drive(args.direction, args.speed, args.seconds)
+        return steering_frame(args.direction, args.speed)
     if args.command == "stop":
         return stop_frame()
     raise ProtocolError(f"unknown command: {args.command}")
@@ -110,6 +120,8 @@ async def run_command(args: argparse.Namespace) -> int:
             await client.horn(args.state == "on")
         elif args.command == "drive":
             await client.drive(args.left, args.right, args.seconds)
+        elif args.command == "steer":
+            await client.steer(args.direction, args.speed, args.seconds)
         elif args.command == "stop":
             await client.stop()
         else:

@@ -18,7 +18,7 @@ class CmdVelTest(unittest.TestCase):
         self.assertEqual(command.left, 50)
         self.assertEqual(command.right, 50)
 
-    def test_forward_turn_keeps_differential_wheel_speeds(self) -> None:
+    def test_positive_angular_command_maps_to_left_steer_drive(self) -> None:
         command = cmd_vel_to_drive(
             0.5,
             1.0,
@@ -27,19 +27,38 @@ class CmdVelTest(unittest.TestCase):
             max_speed=100,
         )
         self.assertFalse(command.should_stop)
-        self.assertEqual(command.left, 25)
-        self.assertEqual(command.right, 75)
+        self.assertTrue(command.accepted)
+        self.assertEqual(command.reason, "steer_drive")
+        self.assertEqual(command.steering, "left")
+        self.assertEqual((command.left, command.right), (50, 50))
 
-    def test_pivot_is_rejected_until_reverse_is_verified(self) -> None:
+    def test_negative_angular_command_maps_to_right_steer_drive(self) -> None:
+        command = cmd_vel_to_drive(
+            0.5,
+            -1.0,
+            wheel_base_m=0.5,
+            max_linear_mps=1.0,
+            max_speed=100,
+        )
+        self.assertFalse(command.should_stop)
+        self.assertTrue(command.accepted)
+        self.assertEqual(command.reason, "steer_drive")
+        self.assertEqual(command.steering, "right")
+        self.assertEqual((command.left, command.right), (50, 50))
+
+    def test_pivot_command_maps_to_stationary_steering(self) -> None:
         command = cmd_vel_to_drive(0.0, 1.0)
-        self.assertTrue(command.should_stop)
-        self.assertFalse(command.accepted)
-        self.assertEqual(command.reason, "reverse_or_pivot_not_verified")
+        self.assertFalse(command.should_stop)
+        self.assertTrue(command.accepted)
+        self.assertEqual(command.reason, "steer_only")
+        self.assertEqual(command.steering, "left")
+        self.assertEqual((command.left, command.right), (0, 0))
 
     def test_reverse_is_rejected_until_verified(self) -> None:
         command = cmd_vel_to_drive(-0.1, 0.0)
         self.assertTrue(command.should_stop)
         self.assertFalse(command.accepted)
+        self.assertEqual(command.reason, "reverse_not_verified")
 
     def test_non_finite_velocity_is_rejected(self) -> None:
         with self.assertRaises(ProtocolError):

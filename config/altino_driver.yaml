@@ -6,8 +6,8 @@ altino_driver:
     name_hint: "ALTINO"
     scan_seconds: 8.0
 
-    # Bring-up placeholders. Calibrate on the physical Altino before using
-    # odometry or navigation results as portfolio evidence.
+    # Bring-up placeholders. Angular commands use verified discrete Android
+    # steering states; angular magnitude is not calibrated as curvature yet.
     wheel_base_m: 0.12
     max_linear_mps: 0.35
 

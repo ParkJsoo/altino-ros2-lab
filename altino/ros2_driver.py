@@ -19,7 +19,7 @@ from .cmd_vel import (
     DEFAULT_WHEEL_BASE_M,
 )
 from .driver_core import DEFAULT_CMD_TIMEOUT_S, AltinoDriverCore, DriverEvent
-from .protocol import drive_frame
+from .protocol import drive_frame, steering_frame
 
 SHUTDOWN_OPERATION_TIMEOUT_S = 1.0
 SHUTDOWN_JOIN_TIMEOUT_S = 1.0
@@ -35,6 +35,8 @@ class AsyncBleWorker:
         self.loop = asyncio.new_event_loop()
         self._ready = threading.Event()
         self._thread = threading.Thread(target=self._run, name="altino-ble", daemon=True)
+        self._steering_marker = True
+        self._last_steering_direction: str | None = None
 
     def start(self) -> None:
         self._thread.start()
@@ -44,9 +46,22 @@ class AsyncBleWorker:
         return self.submit(self.client.connect())
 
     def write_drive(self, left: int, right: int) -> Future[None]:
+        self._last_steering_direction = None
+        self._steering_marker = True
         return self.submit(self.client.write_frame(drive_frame(left, right), "cmd_vel"))
 
+    def write_steer(self, direction: str, speed: int) -> Future[None]:
+        if direction != self._last_steering_direction:
+            self._steering_marker = True
+            self._last_steering_direction = direction
+
+        frame = steering_frame(direction, speed, marker=self._steering_marker)
+        self._steering_marker = not self._steering_marker
+        return self.submit(self.client.write_frame(frame, f"cmd_vel-steer-{direction}"))
+
     def stop(self, reason: str) -> Future[None]:
+        self._last_steering_direction = None
+        self._steering_marker = True
         return self.submit(self.client.stop_burst(reason))
 
     def shutdown(self) -> None:
@@ -80,6 +95,9 @@ class WorkerTransport:
 
     def drive(self, left: int, right: int, reason: str) -> Future[None]:
         return self.worker.write_drive(left, right)
+
+    def steer(self, direction: str, speed: int, reason: str) -> Future[None]:
+        return self.worker.write_steer(direction, speed)
 
     def stop(self, reason: str) -> Future[None]:
         return self.worker.stop(reason)

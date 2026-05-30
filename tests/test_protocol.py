@@ -9,6 +9,7 @@ from altino.protocol import (
     hex_frame,
     horn_frame,
     light_frame,
+    steering_frame,
     stop_frame,
     validate_drive,
 )
@@ -38,6 +39,23 @@ class ProtocolTest(unittest.TestCase):
         self.assertEqual(frame[6:8], b"\x00\xc8")
         self.assertEqual(frame[8:10], b"\x00\x64")
         self.assertEqual(frame[2], checksum(frame))
+
+    def test_steering_frames_match_verified_android_capture(self) -> None:
+        self.assertEqual(
+            hex_frame(steering_frame("left", 300)),
+            "02 10 e0 01 01 80 01 2c 01 2c 00 00 00 00 00 00 00 00 00 00 04 03",
+        )
+        self.assertEqual(
+            hex_frame(steering_frame("right", 300)),
+            "02 10 e3 01 01 7f 01 2c 01 2c 00 00 00 00 00 00 00 00 00 00 08 03",
+        )
+
+    def test_steering_frames_can_omit_android_marker(self) -> None:
+        self.assertEqual(
+            hex_frame(steering_frame("left", 300, marker=False)),
+            "02 10 dc 01 01 80 01 2c 01 2c 00 00 00 00 00 00 00 00 00 00 00 03",
+        )
+        self.assertEqual(steering_frame("center", 300), drive_frame(300, 300))
 
     def test_android_chunks_are_14_then_8_bytes(self) -> None:
         first, second = android_chunks(light_frame(True))

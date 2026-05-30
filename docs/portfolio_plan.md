@@ -7,7 +7,7 @@
   - scan
   - light on/off
   - horn on/off
-  - drive left/right duration
+  - drive motor values and duration
   - stop
 - Add command clamps and automatic stop.
 
@@ -41,11 +41,11 @@ Verified on Raspberry Pi:
 
 Current implementation:
 
-- `altino/cmd_vel.py` converts planar `/cmd_vel` values into conservative forward-only wheel commands.
+- `altino/cmd_vel.py` converts straight forward `/cmd_vel` values into conservative equal motor commands and maps angular commands to verified Android left/right steering frames.
 - `altino/driver_core.py` keeps command handling and watchdog behavior testable without ROS2 or BLE hardware.
 - `altino/ros2_driver.py` defines an optional ROS2 node entry point.
 - The node subscribes to `/cmd_vel`, publishes `/driver_state`, and uses a stale-command watchdog.
-- `tests/test_cmd_vel.py` and `tests/test_driver_core.py` verify mapping, fake-transport command flow, watchdog stop, reverse rejection, and non-finite input rejection.
+- `tests/test_cmd_vel.py` and `tests/test_driver_core.py` verify mapping, fake-transport command flow, watchdog stop, reverse rejection, angular steering, and non-finite input rejection.
 - `config/altino_driver.yaml` and `launch/altino_driver.launch.py` prepare Pi-side ROS2 bring-up.
 - `docs/pi_bringup_checklist.md` lists the hardware sequence to run only when the Pi is free.
 
@@ -54,12 +54,12 @@ Verified on Raspberry Pi:
 - `python3 -m altino.ros2_driver` created `/cmd_vel` and `/driver_state`.
 - `/cmd_vel` publish at `linear.x=0.35` produced `drive left=350 right=350`.
 - Watchdog published `stop reason=watchdog_timeout`.
+- Android-captured steering frames were physically verified from the Pi driver: left/right steering, center return, and left/right drive steering worked.
 
 Recommended next step:
 
-- Power the Pi back on and verify the patched clean Ctrl-C shutdown path.
-- Re-test through `ros2 launch ./launch/altino_driver.launch.py`.
-- Tune `wheel_base_m`, `max_linear_mps`, and low-speed threshold before odometry work.
+- Pull the verified steering implementation onto the Pi and run a short ROS2 angular `/cmd_vel` smoke test.
+- Tune `max_linear_mps`, low-speed threshold, and steering response before odometry work.
 
 ## Phase 4: Sensors
 

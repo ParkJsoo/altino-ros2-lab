@@ -5,11 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import isfinite
 
-from .protocol import MAX_DRIVE_SPEED, ProtocolError
+from .protocol import MAX_DRIVE_SPEED, ProtocolError, normalize_steering_direction
 
 DEFAULT_WHEEL_BASE_M = 0.12
 DEFAULT_MAX_LINEAR_MPS = 0.35
 DEFAULT_DEADBAND_MPS = 0.001
+DEFAULT_ANGULAR_DEADBAND_RADPS = 0.001
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,7 @@ class WheelCommand:
     should_stop: bool
     accepted: bool
     reason: str
+    steering: str = "center"
 
 
 def cmd_vel_to_drive(
@@ -29,11 +31,14 @@ def cmd_vel_to_drive(
     max_linear_mps: float = DEFAULT_MAX_LINEAR_MPS,
     max_speed: int = MAX_DRIVE_SPEED,
     deadband_mps: float = DEFAULT_DEADBAND_MPS,
+    angular_deadband_radps: float = DEFAULT_ANGULAR_DEADBAND_RADPS,
 ) -> WheelCommand:
     """Convert planar velocity to current safe Altino wheel commands.
 
-    Reverse and pivot commands are intentionally rejected until negative wheel
-    encoding is verified on the physical Altino.
+    Physical tests showed Altino Lite does not turn from differential motor
+    commands through the current BLE frame. Android Orchestra steering packets
+    are verified as discrete left/right/center steering states, so angular
+    magnitude currently selects direction only.
     """
 
     validate_float(linear_x, "linear_x")
@@ -41,30 +46,45 @@ def cmd_vel_to_drive(
     validate_positive_float(wheel_base_m, "wheel_base_m")
     validate_positive_float(max_linear_mps, "max_linear_mps")
     validate_positive_float(deadband_mps, "deadband_mps")
+    validate_positive_float(angular_deadband_radps, "angular_deadband_radps")
     validate_max_speed(max_speed)
 
-    left_mps = linear_x - angular_z * wheel_base_m / 2.0
-    right_mps = linear_x + angular_z * wheel_base_m / 2.0
-
-    if abs(left_mps) <= deadband_mps and abs(right_mps) <= deadband_mps:
+    if abs(linear_x) <= deadband_mps and abs(angular_z) <= angular_deadband_radps:
         return WheelCommand(0, 0, should_stop=True, accepted=True, reason="zero_command")
 
-    if left_mps < -deadband_mps or right_mps < -deadband_mps:
+    if linear_x < -deadband_mps:
         return WheelCommand(
             0,
             0,
             should_stop=True,
             accepted=False,
-            reason="reverse_or_pivot_not_verified",
+            reason="reverse_not_verified",
         )
 
-    left = wheel_mps_to_speed(max(0.0, left_mps), max_linear_mps, max_speed)
-    right = wheel_mps_to_speed(max(0.0, right_mps), max_linear_mps, max_speed)
+    speed = wheel_mps_to_speed(max(0.0, linear_x), max_linear_mps, max_speed)
 
-    if left == 0 and right == 0:
+    if abs(angular_z) > angular_deadband_radps:
+        steering = angular_z_to_steering(angular_z)
+        reason = "steer_drive" if speed else "steer_only"
+        return WheelCommand(
+            speed,
+            speed,
+            should_stop=False,
+            accepted=True,
+            reason=reason,
+            steering=steering,
+        )
+
+    if speed == 0:
         return WheelCommand(0, 0, should_stop=True, accepted=True, reason="below_deadband")
 
-    return WheelCommand(left, right, should_stop=False, accepted=True, reason="drive")
+    return WheelCommand(speed, speed, should_stop=False, accepted=True, reason="drive")
+
+
+def angular_z_to_steering(angular_z: float) -> str:
+    if angular_z > 0:
+        return normalize_steering_direction("left")
+    return normalize_steering_direction("right")
 
 
 def wheel_mps_to_speed(value_mps: float, max_linear_mps: float, max_speed: int) -> int:

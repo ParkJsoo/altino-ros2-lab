@@ -11,6 +11,7 @@ from .protocol import (
     drive_frame,
     horn_frame,
     light_frame,
+    steering_frame,
     stop_frame,
 )
 from .cmd_vel import cmd_vel_to_drive
@@ -30,5 +31,6 @@ __all__ = [
     "horn_frame",
     "light_frame",
     "RecordingTransport",
+    "steering_frame",
     "stop_frame",
 ]

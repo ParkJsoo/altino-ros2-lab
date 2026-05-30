@@ -86,12 +86,16 @@ In a second terminal with the same ROS2 environment:
 export ROS_DOMAIN_ID=42
 ros2 topic echo /driver_state
 ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.35}, angular: {z: 0.0}}"
+ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.30}, angular: {z: 0.5}}"
+ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.30}, angular: {z: -0.5}}"
 ```
 
 Expected:
 
 - `/driver_state` reports a drive command
 - the robot moves slowly forward
+- positive `angular.z` steers left with equal motor speed
+- negative `angular.z` steers right with equal motor speed
 - after the command becomes stale, `/driver_state` reports `watchdog_timeout`
 - Altino stops
 
@@ -125,15 +129,47 @@ angular.z=+0.50 -> drive left=270 right=330 -> stop reason=watchdog_timeout
 angular.z=-0.50 -> drive left=330 right=270 -> stop reason=watchdog_timeout
 ```
 
-This confirms differential wheel mapping for forward arc commands. Record
-operator observation separately before treating the sign of `angular.z` as
-physically verified for left/right turns.
+Follow-up direct motor differential tests on 2026-05-30:
+
+```text
+left=0 right=350 -> physically observed as straight
+left=350 right=0 -> physically observed as straight
+```
+
+Follow-up steering-byte tests on 2026-05-30:
+
+```text
+steering=1,2,3 with equal motor speeds -> physically observed as straight
+steering=127 and steering=255 -> visible steering hunting, not reliable turning
+```
+
+Conclusion: the differential-drive interpretation is invalid for this Altino BLE
+path. Use the Android app's actual left/right steering BLE packets instead.
+
+Android Orchestra steering capture on 2026-05-31 decoded these frames:
+
+```text
+left turn:  byte5=0x80, equal motor fields, byte20=0x04
+right turn: byte5=0x7f, equal motor fields, byte20=0x08
+```
+
+Physical verification on 2026-05-31 from the Pi driver:
+
+- `CAPTURED_LEFT_STEER_ONLY` moved the front wheels left.
+- center/stop frames returned the wheels to center.
+- `CAPTURED_LEFT_DRIVE` and `CAPTURED_RIGHT_DRIVE` produced left/right steering while driving.
+- `CAPTURED_RIGHT_STEER_ONLY` moved the front wheels right and center/stop returned them.
+
+These are available through `python3 -m altino.cli steer left|right|center`.
+ROS2 angular `/cmd_vel` now maps to these discrete steering states: positive is
+left, negative is right. Angular magnitude is not calibrated as curvature yet.
 
 ## Stop Conditions
 
 Stop and investigate if any of these happen:
 
 - command runs but no automatic stop occurs
-- reverse or pivot command causes movement
+- reverse command causes movement
+- pure pivot command causes translation instead of stationary steering
 - BLE disconnect does not stop the robot
 - MotionBrain services or hardware access are active on the same Pi

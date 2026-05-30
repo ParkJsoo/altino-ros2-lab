@@ -12,13 +12,16 @@ from .protocol import (
     drive_frame,
     horn_frame,
     light_frame,
+    steering_frame,
     stop_frame,
     validate_drive,
+    validate_steering_drive,
 )
 
 STOP_BURST_COUNT = 3
 STOP_BURST_INTERVAL = 0.15
 CHUNK_INTERVAL = 0.02
+STEERING_REPEAT_INTERVAL = 0.12
 
 
 class BleDependencyError(RuntimeError):
@@ -97,6 +100,23 @@ class AltinoBleClient:
             await asyncio.sleep(duration)
         finally:
             await self.stop_burst("auto-stop")
+
+    async def steer(self, direction: str, speed: int, duration: float) -> None:
+        validate_steering_drive(direction, speed, duration)
+        try:
+            elapsed = 0.0
+            marker = True
+            while elapsed < duration:
+                await self.write_frame(
+                    steering_frame(direction, speed, marker=marker),
+                    f"steer-{direction}",
+                )
+                marker = not marker
+                interval = min(STEERING_REPEAT_INTERVAL, duration - elapsed)
+                await asyncio.sleep(interval)
+                elapsed += interval
+        finally:
+            await self.stop_burst("steer-auto-stop")
 
     async def stop_burst(self, label: str) -> None:
         frame = stop_frame()

@@ -21,6 +21,9 @@ class DriverTransport(Protocol):
     def drive(self, left: int, right: int, reason: str) -> Any:
         """Send a drive command and return the transport-specific operation."""
 
+    def steer(self, direction: str, speed: int, reason: str) -> Any:
+        """Send a verified Android-style steering command."""
+
     def stop(self, reason: str) -> Any:
         """Send a stop command and return the transport-specific operation."""
 
@@ -32,12 +35,18 @@ class DriverEvent:
     accepted: bool
     left: int = 0
     right: int = 0
+    steering: str = "center"
     operation: Any = None
 
     @property
     def message(self) -> str:
         if self.action == "drive":
             return f"drive left={self.left} right={self.right} reason={self.reason}"
+        if self.action == "steer":
+            return (
+                f"steer direction={self.steering} speed={self.left} "
+                f"reason={self.reason}"
+            )
         return f"stop reason={self.reason}"
 
 
@@ -47,6 +56,7 @@ class RecordedCommand:
     reason: str
     left: int = 0
     right: int = 0
+    steering: str = "center"
 
 
 class RecordingTransport:
@@ -57,6 +67,17 @@ class RecordingTransport:
 
     def drive(self, left: int, right: int, reason: str) -> RecordedCommand:
         command = RecordedCommand("drive", reason, left=left, right=right)
+        self.commands.append(command)
+        return command
+
+    def steer(self, direction: str, speed: int, reason: str) -> RecordedCommand:
+        command = RecordedCommand(
+            "steer",
+            reason,
+            left=speed,
+            right=speed,
+            steering=direction,
+        )
         self.commands.append(command)
         return command
 
@@ -122,6 +143,23 @@ class AltinoDriverCore:
         return self.send_stop("shutdown_stop", accepted=True)
 
     def send_drive(self, command: WheelCommand) -> DriverEvent:
+        if command.steering != "center":
+            operation = self.transport.steer(
+                command.steering,
+                command.left,
+                command.reason,
+            )
+            self.stopped = False
+            return DriverEvent(
+                "steer",
+                command.reason,
+                accepted=command.accepted,
+                left=command.left,
+                right=command.right,
+                steering=command.steering,
+                operation=operation,
+            )
+
         operation = self.transport.drive(command.left, command.right, command.reason)
         self.stopped = False
         return DriverEvent(

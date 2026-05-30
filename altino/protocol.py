@@ -28,6 +28,11 @@ MAX_DRIVE_DURATION = 3.0
 
 HORN_ON_VALUE = 0x0F
 LIGHT_ON_VALUE = 0x01
+STEERING_LEFT_VALUE = 0x80
+STEERING_RIGHT_VALUE = 0x7F
+STEERING_LEFT_MARKER_VALUE = 0x04
+STEERING_RIGHT_MARKER_VALUE = 0x08
+STEERING_DIRECTIONS = ("left", "right", "center")
 
 
 class ProtocolError(ValueError):
@@ -62,10 +67,48 @@ def drive_frame(left: int, right: int) -> bytes:
     return build_frame(left=left, right=right)
 
 
+def steering_frame(direction: str, speed: int = 0, *, marker: bool = True) -> bytes:
+    """Build a verified Android steering frame.
+
+    Android Orchestra writes steering as byte 5 plus a byte 20 marker. It also
+    alternates marker and non-marker frames while the button is held.
+    """
+
+    direction = normalize_steering_direction(direction)
+    validate_speed(speed, "speed")
+
+    if direction == "center":
+        return build_frame(left=speed, right=speed)
+
+    if direction == "left":
+        return build_frame(
+            steering=STEERING_LEFT_VALUE,
+            left=speed,
+            right=speed,
+            light=STEERING_LEFT_MARKER_VALUE if marker else 0,
+        )
+
+    return build_frame(
+        steering=STEERING_RIGHT_VALUE,
+        left=speed,
+        right=speed,
+        light=STEERING_RIGHT_MARKER_VALUE if marker else 0,
+    )
+
+
 def validate_drive(left: int, right: int, duration: float) -> None:
     validate_speed(left, "left")
     validate_speed(right, "right")
+    validate_duration(duration)
 
+
+def validate_steering_drive(direction: str, speed: int, duration: float) -> None:
+    normalize_steering_direction(direction)
+    validate_speed(speed, "speed")
+    validate_duration(duration)
+
+
+def validate_duration(duration: float) -> None:
     if not isinstance(duration, (int, float)) or not isfinite(duration):
         raise ProtocolError("duration must be a finite number")
     if duration < MIN_DRIVE_DURATION or duration > MAX_DRIVE_DURATION:
@@ -73,6 +116,13 @@ def validate_drive(left: int, right: int, duration: float) -> None:
             f"duration must be between {MIN_DRIVE_DURATION:.2f} and "
             f"{MAX_DRIVE_DURATION:.2f} seconds"
         )
+
+
+def normalize_steering_direction(direction: str) -> str:
+    if direction not in STEERING_DIRECTIONS:
+        expected = ", ".join(STEERING_DIRECTIONS)
+        raise ProtocolError(f"steering direction must be one of: {expected}")
+    return direction
 
 
 def validate_speed(value: int, label: str) -> None:
