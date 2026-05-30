@@ -1,0 +1,15 @@
+altino_driver:
+  ros__parameters:
+    # Leave empty to scan by name_hint. Fill this with a fixed BLE address only
+    # after the Raspberry Pi scan confirms the device address.
+    address: ""
+    name_hint: "ALTINO"
+    scan_seconds: 8.0
+
+    # Bring-up placeholders. Calibrate on the physical Altino before using
+    # odometry or navigation results as portfolio evidence.
+    wheel_base_m: 0.12
+    max_linear_mps: 0.35
+
+    # Stop if /cmd_vel is stale for this long.
+    cmd_timeout_s: 0.5
