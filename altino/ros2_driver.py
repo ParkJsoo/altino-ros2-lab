@@ -7,6 +7,7 @@ on machines without ROS2 installed.
 from __future__ import annotations
 
 import asyncio
+import signal
 import sys
 import threading
 from collections.abc import Sequence
@@ -178,12 +179,24 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     rclpy.init(args=list(argv) if argv is not None else None)
     node: AltinoDriverNode | None = None
+    previous_signal_handlers: dict[int, object] = {}
+
+    def request_shutdown(signum: int, frame: object) -> None:
+        if rclpy.ok():
+            rclpy.shutdown()
+
+    for signum in (signal.SIGINT, signal.SIGTERM):
+        previous_signal_handlers[signum] = signal.getsignal(signum)
+        signal.signal(signum, request_shutdown)
+
     try:
         node = AltinoDriverNode()
         rclpy.spin(node)
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
+        for signum, handler in previous_signal_handlers.items():
+            signal.signal(signum, handler)
         if node is not None:
             node.close()
             node.destroy_node()
