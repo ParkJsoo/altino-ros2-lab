@@ -20,6 +20,9 @@ from .cmd_vel import (
 from .driver_core import DEFAULT_CMD_TIMEOUT_S, AltinoDriverCore, DriverEvent
 from .protocol import drive_frame
 
+SHUTDOWN_OPERATION_TIMEOUT_S = 1.0
+SHUTDOWN_JOIN_TIMEOUT_S = 1.0
+
 
 class AsyncBleWorker:
     def __init__(self, *, address: str | None, name_hint: str, scan_seconds: float) -> None:
@@ -48,15 +51,15 @@ class AsyncBleWorker:
     def shutdown(self) -> None:
         if self._ready.is_set():
             try:
-                self.stop("shutdown-stop").result(timeout=2.0)
+                self.stop("shutdown-stop").result(timeout=SHUTDOWN_OPERATION_TIMEOUT_S)
             except Exception:
                 pass
             try:
-                self.submit(self.client.disconnect()).result(timeout=2.0)
+                self.submit(self.client.disconnect()).result(timeout=SHUTDOWN_OPERATION_TIMEOUT_S)
             except Exception:
                 pass
             self.loop.call_soon_threadsafe(self.loop.stop)
-            self._thread.join(timeout=2.0)
+            self._thread.join(timeout=SHUTDOWN_JOIN_TIMEOUT_S)
 
     def submit(self, coroutine: object) -> Future[None]:
         if not self._ready.is_set():
@@ -85,6 +88,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         import rclpy
         from geometry_msgs.msg import Twist
+        from rclpy.executors import ExternalShutdownException
         from rclpy.node import Node
         from std_msgs.msg import String
     except ImportError as exc:
@@ -177,7 +181,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         node = AltinoDriverNode()
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         if node is not None:
