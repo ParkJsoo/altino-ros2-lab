@@ -2,6 +2,28 @@
 
 Use this only when the Raspberry Pi is not being used by MotionBrain.
 
+Before Altino hardware tests from the Mac, stop MotionBrain's auto-reconcile
+timer and services:
+
+```sh
+tools/raspi/motionbrain-off-for-altino.sh
+```
+
+This prompts for the Pi sudo password if needed and verifies these units are
+inactive:
+
+- `motionbrain-dashboard-reconcile.timer`
+- `motionbrain-dashboard-reconcile.service`
+- `motionbrain-dashboard.service`
+- `motionbrain-perception.service`
+- `motionbrain-ros-bridge.service`
+
+After Altino testing, restore MotionBrain:
+
+```sh
+tools/raspi/motionbrain-on.sh
+```
+
 ## 1. Prepare an isolated Python environment
 
 ```sh
@@ -78,6 +100,20 @@ ros2 launch ./launch/altino_driver.launch.py
 Run the launch command from the same activated venv so `python3` can import
 `bleak`.
 
+Full pre-sensor bringup with robot model and optional RViz:
+
+```sh
+ros2 launch ./launch/altino_bringup.launch.py rviz:=true
+```
+
+This requires ROS2 packages `robot_state_publisher`, `xacro`, and `rviz2`.
+The TF chain is `odom -> base_footprint -> base_link`. Planned IMU/range/LiDAR
+placeholder frames are off by default; enable them only for mount planning:
+
+```sh
+ros2 launch ./launch/altino_bringup.launch.py include_sensor_placeholders:=true
+```
+
 ## 5. Test `/cmd_vel`
 
 In a second terminal with the same ROS2 environment:
@@ -98,6 +134,21 @@ Expected:
 - negative `angular.z` steers right with equal motor speed
 - after the command becomes stale, `/driver_state` reports `watchdog_timeout`
 - Altino stops
+
+Safety checks:
+
+```sh
+ros2 topic pub --once /emergency_stop std_msgs/msg/Bool "{data: true}"
+ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.30}, angular: {z: 0.0}}"
+ros2 service call /clear_emergency_stop std_srvs/srv/Trigger "{}"
+```
+
+Expected:
+
+- `/emergency_stop` immediately sends a stop and latches the driver.
+- `/cmd_vel` while latched reports `stop reason=emergency_stop_active`.
+- false `/emergency_stop` messages do not clear the latch.
+- `/clear_emergency_stop` clears the latch.
 
 Observed on 2026-05-30:
 
@@ -174,6 +225,55 @@ angular.z=-0.50 -> steer direction=right speed=300 -> physically clear right tur
 
 Operator observation: left and right turns were similar enough that the robot
 returned close to its starting pose after the left/right pair.
+
+## 6. Verify open-loop `/odom` and TF
+
+In a second terminal with the same ROS2 environment:
+
+```sh
+export ROS_DOMAIN_ID=42
+ros2 topic echo /odom
+ros2 topic hz /odom
+ros2 run tf2_ros tf2_echo odom base_footprint
+```
+
+Expected:
+
+- `/odom` is published while the driver is running.
+- `tf2_echo` shows a connected `odom -> base_footprint` transform.
+- with bringup active, `robot_state_publisher` provides `base_footprint -> base_link`.
+- Pose changes when accepted `/cmd_vel` commands are sent.
+- Pose stops changing after zero command, rejected command, or watchdog stop.
+- The observed path is command-integrated and may drift from physical motion.
+
+RViz check:
+
+- Use `config/altino_odom_tf.rviz`, or manually set fixed frame to `odom`.
+- Add TF display.
+- Add Odometry display for `/odom`.
+- Capture a screenshot before adding sensors or LiDAR.
+
+Captured on 2026-07-06 in `docs/evidence/2026-07-06-rviz-clean/`:
+
+- MotionBrain services and the reconcile timer stayed inactive during capture.
+- `/cmd_vel` had one subscriber: `altino_driver`.
+- five `linear.x=0.30` commands produced `/driver_state` drive messages followed by `stop reason=watchdog_timeout`.
+- `/odom` and `odom -> base_link` TF matched at `x=0.2754192056999273`.
+- RViz displayed Grid, TF, and `/odom` without captured warnings or errors.
+
+That capture predates the `base_footprint` split. Current bringup should use
+`odom -> base_footprint -> base_link`.
+
+Captured on 2026-07-06 in `docs/evidence/2026-07-06-bringup-estop/`:
+
+- `altino_bringup.launch.py` started `robot_state_publisher`, `altino_driver`,
+  and RViz.
+- RViz displayed Grid, TF, RobotModel, and `/odom`.
+- `/odom` used `child_frame_id: base_footprint`.
+- `tf2_echo` confirmed `odom -> base_footprint` and `base_footprint -> base_link`.
+- `/emergency_stop` latched the driver and blocked later `/cmd_vel` as
+  `stop reason=emergency_stop_active`.
+- `/clear_emergency_stop` returned `success=True`.
 
 ## Stop Conditions
 

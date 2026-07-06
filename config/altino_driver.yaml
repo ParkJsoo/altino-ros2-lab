@@ -15,3 +15,27 @@ altino_driver:
 
     # Stop if /cmd_vel is stale for this long.
     cmd_timeout_s: 0.5
+
+    # Topic names are relative by default so launch files can remap or namespace
+    # the driver normally. With no namespace these appear as /cmd_vel,
+    # /driver_state, and /odom.
+    cmd_vel_topic: "cmd_vel"
+    driver_state_topic: "driver_state"
+    emergency_stop_topic: "emergency_stop"
+    clear_emergency_stop_service: "clear_emergency_stop"
+    odom_topic: "odom"
+
+    # Pre-sensor open-loop odometry. This integrates accepted commands only; it
+    # is not encoder, IMU, LiDAR, SLAM, or localization feedback.
+    odom_mode: "open_loop_commanded"
+    publish_odom: true
+    publish_tf: true
+    odom_frame_id: "odom"
+    # With robot_state_publisher active, the full TF chain is:
+    # odom -> base_footprint -> base_link.
+    base_frame_id: "base_footprint"
+    odom_publish_hz: 10.0
+
+    # Keep this at 0.0 until left/right steering yaw rate is measured. Straight
+    # commands still integrate forward in open-loop odom.
+    steering_yaw_rate_radps: 0.0

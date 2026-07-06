@@ -108,6 +108,33 @@ class DriverCoreTest(unittest.TestCase):
         self.assertEqual(event.reason, "shutdown_stop")
         self.assertEqual(transport.commands[-1].action, "stop")
 
+    def test_emergency_stop_latches_until_cleared(self) -> None:
+        transport = RecordingTransport()
+        core = AltinoDriverCore(transport)
+
+        event = core.emergency_stop()
+
+        self.assertEqual(event.action, "stop")
+        self.assertEqual(event.reason, "emergency_stop")
+        self.assertTrue(core.emergency_stopped)
+
+        event = core.handle_cmd_vel(0.3, 0.0, now=1.0)
+
+        self.assertEqual(event.action, "stop")
+        self.assertFalse(event.accepted)
+        self.assertEqual(event.reason, "emergency_stop_active")
+
+        self.assertTrue(core.clear_emergency_stop())
+        event = core.handle_cmd_vel(0.3, 0.0, now=2.0)
+
+        self.assertEqual(event.action, "drive")
+        self.assertEqual(event.reason, "drive")
+
+    def test_clear_emergency_stop_reports_when_not_active(self) -> None:
+        core = AltinoDriverCore(RecordingTransport())
+
+        self.assertFalse(core.clear_emergency_stop())
+
 
 if __name__ == "__main__":
     unittest.main()

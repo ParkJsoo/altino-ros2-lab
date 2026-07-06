@@ -1,0 +1,23 @@
+[INFO] [1783343804.951896324] [altino_driver]: connect ok
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/motionbrain/altino-ros2-lab/altino/ros2_driver.py", line 341, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/motionbrain/altino-ros2-lab/altino/ros2_driver.py", line 326, in main
+    rclpy.spin(node)
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/__init__.py", line 247, in spin
+    executor.spin_once()
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 926, in spin_once
+    self._spin_once_impl(timeout_sec)
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 918, in _spin_once_impl
+    raise handler.exception()
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/task.py", line 286, in _execute_coroutine_step
+    result = coro.send(None)
+             ^^^^^^^^^^^^^^^
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 588, in handler
+    gc.trigger()
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/guard_condition.py", line 33, in trigger
+    with self.__gc:
+rclpy._rclpy_pybind11.InvalidHandle: cannot use Destroyable because destruction was requested

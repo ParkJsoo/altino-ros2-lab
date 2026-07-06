@@ -1,49 +1,66 @@
 # Altino ROS2 Lab
 
-Separate mobile-robot portfolio project for Altino Lite.
+[한국어 README](README.ko.md)
 
-This project is intentionally split from MotionBrain:
+Altino ROS2 Lab is a mobile-robot portfolio project for Altino Lite. It builds a
+verified BLE driver, a ROS2 `/cmd_vel` bridge, watchdog and e-stop safety paths,
+open-loop odom/TF, and a pre-sensor RViz bringup stack.
+
+This project is intentionally separate from MotionBrain:
 
 - MotionBrain: manipulator, STM32 firmware, actuator control, embedded evidence.
-- Altino ROS2 Lab: mobile robot, BLE driver, ROS2 command bridge, safety, optional SLAM/Nav.
+- Altino ROS2 Lab: mobile base, BLE transport, ROS2 integration, TF/RViz evidence.
 
 ## Current Status
 
-- macOS Swift BLE CLI can control Altino Lite through the verified Android-style BLE protocol.
-- Python protocol code now reproduces the verified 22-byte frames and 14+8 BLE chunk split.
-- Python BLE transport is verified on Raspberry Pi/Linux through `bleak`.
-- ROS2 `/cmd_vel` to BLE bridge is verified on Raspberry Pi with watchdog stop.
+- BLE CLI and Pi `bleak` transport are verified with the Android-style 22-byte, 14+8 split-write protocol.
+- ROS2 `/cmd_vel` control is verified on Raspberry Pi with `/driver_state` and watchdog stop.
+- Left/right steering uses verified Android BLE packets.
+- The driver publishes command-integrated `/odom` and `odom -> base_footprint` TF.
+- Bringup provides `base_footprint -> base_link` through `robot_state_publisher`.
+- RViz evidence exists for odom/TF, RobotModel, e-stop latch, and clear service.
 
-Start from `.codex/START_HERE.md` in a new Codex session. `.codex/` is local working memory and is intentionally ignored by git.
+## System Shape
 
-## Verified BLE Protocol
+```text
+/cmd_vel
+  -> altino_driver
+       -> BLE write -> Altino Lite
+       -> /driver_state
+       -> /odom
+       -> /tf: odom -> base_footprint
 
-- Device name hint: `ALTINO`
-- Service UUID: `49535343-FE7D-4AE5-8FA9-9FAFD205E455`
-- Notify/read characteristic: `49535343-1E4D-4BD9-BA61-23C647249616`
-- Write characteristic: `49535343-8841-43F4-A8D4-ECBE34729BB3`
-- Frame length: 22 bytes
-- Frame byte 1: `0x10`
-- Write mode: write without response
-- Android-style split: first 14 bytes, then remaining 8 bytes
+robot_state_publisher
+  -> /tf_static: base_footprint -> base_link
 
-## macOS Reference CLI
-
-```sh
-swift tools/altino_ble_write.swift scan
-swift tools/altino_ble_write.swift light on
-swift tools/altino_ble_write.swift light off
-swift tools/altino_ble_write.swift horn on
-swift tools/altino_ble_write.swift horn off
-swift tools/altino_ble_write.swift drive 200 200 1.0
-swift tools/altino_ble_write.swift stop
+/emergency_stop
+  -> latched stop
+/clear_emergency_stop
+  -> clear latch
 ```
 
-The Swift CLI keeps movement conservative: forward-only motor values `0...350`, drive duration `0.05...3.00` seconds, and automatic stop burst after every drive command.
+## Safety and Limits
 
-## Python/Pi CLI
+- Stop MotionBrain before Altino hardware tests on the shared Raspberry Pi.
+- Keep clear floor space; movement commands are real BLE writes to the robot.
+- Watchdog stop, zero-command stop, and latched e-stop are implemented.
+- Reverse commands are rejected until reverse behavior is physically verified.
+- Angular `/cmd_vel` selects discrete verified steering states, not calibrated curvature.
+- `/odom` is command-integrated only. It is not encoder, IMU, LiDAR, SLAM, localization, Nav2, or obstacle-avoidance evidence.
 
-Dry-run frame verification works without BLE hardware:
+## Run Tests
+
+```sh
+python3 -m unittest discover -s tests
+```
+
+The tests cover protocol frames, Android chunking, `/cmd_vel` mapping, driver
+state flow, watchdog stop, e-stop latch, open-loop odom, calibration helpers,
+and robot-description consistency.
+
+## BLE CLI
+
+Dry-run without hardware:
 
 ```sh
 python3 -m altino.cli --dry-run light on
@@ -51,92 +68,82 @@ python3 -m altino.cli --dry-run drive 200 200 1.0
 python3 -m altino.cli --dry-run stop
 ```
 
-On Raspberry Pi/Linux, install BLE support:
+On Raspberry Pi:
 
 ```sh
 python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 python3 -m pip install -r requirements-pi.txt
-```
 
-The `--system-site-packages` flag matters for ROS2: it lets the venv see
-ROS2's apt-installed Python dependencies while keeping `bleak` isolated.
-
-Then run:
-
-```sh
 python3 -m altino.cli scan
 python3 -m altino.cli light on
-python3 -m altino.cli horn on
 python3 -m altino.cli drive 200 200 1.0
 python3 -m altino.cli steer left 300 1.0
 python3 -m altino.cli stop
 ```
 
-Pi hardware verification on 2026-05-30:
+Use `--system-site-packages` so the venv can see ROS2 Python packages while
+keeping Pi-only Python dependencies isolated.
 
-- discovered `ALTINO-L11B2` at `E8:31:CD:B4:0E:E2`
-- light on/off worked
-- horn worked
-- `drive 350 350 2.0` produced visible forward movement
-- lower direct-drive tests at `120` and `250` were not visually obvious
-- Android Orchestra steering capture found turn frames that were physically verified from the Pi on 2026-05-31:
-  - left: `byte5=0x80`, equal motor fields, `byte20=0x04`
-  - right: `byte5=0x7f`, equal motor fields, `byte20=0x08`
+## ROS2 Bringup
 
-## Tests
+Source ROS2 and activate the Pi venv:
 
 ```sh
-python3 -m unittest discover -s tests
+source /opt/ros/jazzy/setup.bash
+source .venv/bin/activate
+export ROS_DOMAIN_ID=42
 ```
 
-The tests cover known stop/light frames, checksum behavior, Android chunking, motor byte order, verified steering frames, `/cmd_vel` mapping, and safety limits.
-
-## ROS2 Bridge Foundation
-
-The ROS2 node is optional at import time, so non-ROS tests still run on macOS:
-
-```sh
-python3 -m altino.ros2_driver
-```
-
-On a Raspberry Pi with ROS2 sourced and BLE support installed, run:
+Driver only:
 
 ```sh
 python3 -m altino.ros2_driver --ros-args --params-file config/altino_driver.yaml
 ```
 
-or with the standalone launch file:
+Full pre-sensor bringup with robot model and optional RViz:
 
 ```sh
-ros2 launch ./launch/altino_driver.launch.py
+ros2 launch ./launch/altino_bringup.launch.py rviz:=true
 ```
 
-Node behavior:
+Safety check:
 
-- subscribes to `/cmd_vel`
-- publishes text status on `/driver_state`
-- converts straight forward `/cmd_vel` commands into equal motor speeds
-- maps positive `angular.z` to verified left steering frames and negative `angular.z` to verified right steering frames
-- rejects reverse commands until reverse behavior is physically verified
-- sends stop on zero command and stale command watchdog timeout
+```sh
+ros2 topic pub --once /emergency_stop std_msgs/msg/Bool "{data: true}"
+ros2 service call /clear_emergency_stop std_srvs/srv/Trigger "{}"
+```
 
-Verified ROS2 result on Raspberry Pi:
+## Raspberry Pi Mode Switching
 
-- `/cmd_vel` subscription appeared
-- `/driver_state` published `drive left=350 right=350 reason=drive`
-- stale command watchdog published `stop reason=watchdog_timeout`
-- direct driver shutdown left no `altino`/`ros2`/daemon processes behind
-- a ROS2 speed sweep mapped `linear.x` values `0.15`, `0.20`, `0.25`, `0.30`, and `0.35` to wheel speeds `150`, `200`, `250`, `300`, and `350`, with watchdog stop after each command
-- 2026-05-31 repeat tests confirmed `linear.x=0.26` as borderline movement and `linear.x=0.30` as the first stable forward motion threshold
-- differential motor tests (`left=0 right=350`, `left=350 right=0`) still drove straight, so the earlier differential turn model is invalid for this Altino BLE path
-- direct steering-byte tests with `steering=1`, `2`, `3`, `127`, and `255` did not produce a reliable physical turn; `127/255` caused visible steering hunting
-- Android app left/right BLE packets were decoded and physically verified from the Pi driver: `0x80/0x04` steers left, `0x7f/0x08` steers right, and stop/center frames recenter the steering
-- ROS2 angular tests at `linear.x=0.30` physically produced clear left and right steering with similar turn ratio
+The current setup shares one Raspberry Pi with MotionBrain. Stop MotionBrain
+before Altino hardware tests:
 
-The default `max_linear_mps` value is a placeholder for safe bring-up. Angular
-commands currently select discrete left/right steering, not calibrated
-curvature. Do not claim odometry or navigation behavior until wheel response is
-calibrated.
+```sh
+tools/raspi/motionbrain-off-for-altino.sh
+tools/raspi/altino-preflight.sh
+```
 
-Pi hardware steps are in `docs/pi_bringup_checklist.md`. Do not run them while another session is using the same Pi for MotionBrain.
+Restore MotionBrain afterward:
+
+```sh
+tools/raspi/motionbrain-on.sh
+```
+
+## Evidence
+
+- `docs/evidence/2026-07-06-rviz-clean/`: original RViz odom/TF capture before the `base_footprint` split.
+- `docs/evidence/2026-07-06-bringup-estop/`: current `odom -> base_footprint -> base_link`, RobotModel, e-stop latch, and clear-service capture.
+- `docs/pi_bringup_checklist.md`: Pi bringup and hardware verification checklist.
+- `docs/manual_calibration.md`: manual distance/yaw calibration workflow before adding sensors.
+- `docs/calibration_trials_template.csv`: CSV template for manual calibration trials.
+- `docs/portfolio_plan.md`: roadmap from BLE driver to sensors, LiDAR, SLAM, and Nav2.
+
+## Next Work
+
+Before sensors: collect manual calibration data for straight speed and steering
+yaw rate.
+
+After sensors: add measured `/imu`, `/range` or `/scan`, then revisit
+localization, SLAM, Nav2, and obstacle avoidance claims with sensor-backed
+evidence.

@@ -1,0 +1,5 @@
+trial,mode,command_linear_x,command_angular_z,duration_s,distance_m,yaw_deg,notes
+straight_1,straight,0.30,0.0,2.0,0.0,0.0,replace distance_m after measuring
+straight_2,straight,0.30,0.0,2.0,0.0,0.0,repeat on same floor
+left_1,steer_left,0.30,0.5,2.0,0.0,0.0,replace yaw_deg from overhead video
+right_1,steer_right,0.30,-0.5,2.0,0.0,0.0,replace yaw_deg from overhead video

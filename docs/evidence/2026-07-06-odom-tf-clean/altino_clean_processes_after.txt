@@ -1,0 +1,7 @@
+740 avahi-daemon: running [motionbrain-pi.local]
+7631 sshd: motionbrain [priv]
+7690 sshd: motionbrain@pts/0
+26538 sshd: motionbrain [priv]
+26596 sshd: motionbrain@notty
+26628 python3 -m altino.ros2_driver --ros-args --params-file config/altino_driver.yaml
+26664 /usr/bin/python3 -c from ros2cli.daemon.daemonize import main; main() --name ros2-daemon --ros-domain-id 42 --rmw-implementation rmw_fastrtps_cpp

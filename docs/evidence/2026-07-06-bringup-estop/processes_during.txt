@@ -1,0 +1,6 @@
+47150 Xvfb :28 -screen 0 1600x1000x24 -ac +extension GLX +render -noreset
+47165 /usr/bin/python3 -c from ros2cli.daemon.daemonize import main; main() --name ros2-daemon --ros-domain-id 44 --rmw-implementation rmw_fastrtps_cpp
+47178 /opt/ros/jazzy/lib/robot_state_publisher/robot_state_publisher --ros-args -r __node:=robot_state_publisher --params-file /tmp/launch_params_kktrp0j_
+47179 bash -lc python3 -m altino.ros2_driver --ros-args --params-file "$1" & child=$!; trap 'kill -TERM "$child" 2>/dev/null; wait "$child" 2>/dev/null; exit 0' INT TERM; wait "$child" altino-driver-wrapper /home/motionbrain/altino-ros2-lab/launch/../config/altino_driver.yaml
+47180 rviz2 -d /home/motionbrain/altino-ros2-lab/launch/../config/altino_odom_tf.rviz
+47186 python3 -m altino.ros2_driver --ros-args --params-file /home/motionbrain/altino-ros2-lab/launch/../config/altino_driver.yaml

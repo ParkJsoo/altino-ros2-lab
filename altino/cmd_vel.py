@@ -61,11 +61,19 @@ def cmd_vel_to_drive(
             reason="reverse_not_verified",
         )
 
-    speed = wheel_mps_to_speed(max(0.0, linear_x), max_linear_mps, max_speed)
+    limited_linear = linear_x > max_linear_mps
+    speed = wheel_mps_to_speed(
+        max(0.0, min(linear_x, max_linear_mps)),
+        max_linear_mps,
+        max_speed,
+    )
 
     if abs(angular_z) > angular_deadband_radps:
         steering = angular_z_to_steering(angular_z)
-        reason = "steer_drive" if speed else "steer_only"
+        if speed:
+            reason = "steer_drive_limited" if limited_linear else "steer_drive"
+        else:
+            reason = "steer_only"
         return WheelCommand(
             speed,
             speed,
@@ -78,7 +86,8 @@ def cmd_vel_to_drive(
     if speed == 0:
         return WheelCommand(0, 0, should_stop=True, accepted=True, reason="below_deadband")
 
-    return WheelCommand(speed, speed, should_stop=False, accepted=True, reason="drive")
+    reason = "drive_limited" if limited_linear else "drive"
+    return WheelCommand(speed, speed, should_stop=False, accepted=True, reason=reason)
 
 
 def angular_z_to_steering(angular_z: float) -> str:

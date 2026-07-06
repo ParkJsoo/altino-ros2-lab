@@ -1,0 +1,4 @@
+35625 Xvfb :27 -screen 0 1600x1000x24 -ac +extension GLX +render -noreset
+35630 python3 -m altino.ros2_driver --ros-args --params-file config/altino_driver.yaml
+35639 /usr/bin/python3 -c from ros2cli.daemon.daemonize import main; main() --name ros2-daemon --ros-domain-id 42 --rmw-implementation rmw_fastrtps_cpp
+35693 rviz2 -d config/altino_odom_tf.rviz

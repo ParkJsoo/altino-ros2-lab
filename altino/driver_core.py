@@ -107,6 +107,7 @@ class AltinoDriverCore:
         self.cmd_timeout_s = cmd_timeout_s
         self.last_cmd_time = self.now()
         self.stopped = True
+        self.emergency_stopped = False
 
     def handle_cmd_vel(
         self,
@@ -116,6 +117,9 @@ class AltinoDriverCore:
         now: float | None = None,
     ) -> DriverEvent:
         timestamp = self.now() if now is None else now
+        if self.emergency_stopped:
+            return self.send_stop("emergency_stop_active", accepted=False)
+
         command = cmd_vel_to_drive(
             linear_x,
             angular_z,
@@ -141,6 +145,15 @@ class AltinoDriverCore:
 
     def shutdown(self) -> DriverEvent:
         return self.send_stop("shutdown_stop", accepted=True)
+
+    def emergency_stop(self) -> DriverEvent:
+        self.emergency_stopped = True
+        return self.send_stop("emergency_stop", accepted=True)
+
+    def clear_emergency_stop(self) -> bool:
+        was_stopped = self.emergency_stopped
+        self.emergency_stopped = False
+        return was_stopped
 
     def send_drive(self, command: WheelCommand) -> DriverEvent:
         if command.steering != "center":

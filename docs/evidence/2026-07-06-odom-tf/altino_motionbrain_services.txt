@@ -1,0 +1,3 @@
+motionbrain-ros-bridge.service active=active
+motionbrain-perception.service active=active
+motionbrain-dashboard.service active=active

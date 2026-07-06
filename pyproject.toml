@@ -14,6 +14,7 @@ pi = ["bleak>=0.22"]
 
 [project.scripts]
 altino-ble = "altino.cli:main"
+altino-calibration = "altino.calibration:main"
 altino-ros2-driver = "altino.ros2_driver:main"
 
 [tool.setuptools]

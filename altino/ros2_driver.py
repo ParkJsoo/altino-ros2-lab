@@ -12,6 +12,7 @@ import sys
 import threading
 from collections.abc import Sequence
 from concurrent.futures import Future
+from math import cos, sin
 
 from .ble_client import AltinoBleClient
 from .cmd_vel import (
@@ -19,10 +20,26 @@ from .cmd_vel import (
     DEFAULT_WHEEL_BASE_M,
 )
 from .driver_core import DEFAULT_CMD_TIMEOUT_S, AltinoDriverCore, DriverEvent
+from .odom_model import (
+    ODOM_MODE_OPEN_LOOP_COMMANDED,
+    OPEN_LOOP_POSE_COVARIANCE,
+    OPEN_LOOP_TWIST_COVARIANCE,
+    OpenLoopOdometry,
+    OdomState,
+)
 from .protocol import drive_frame, steering_frame
 
 SHUTDOWN_OPERATION_TIMEOUT_S = 1.0
 SHUTDOWN_JOIN_TIMEOUT_S = 1.0
+DEFAULT_ODOM_PUBLISH_HZ = 10.0
+
+
+def set_yaw_orientation(orientation: object, yaw: float) -> None:
+    half_yaw = yaw * 0.5
+    orientation.x = 0.0
+    orientation.y = 0.0
+    orientation.z = sin(half_yaw)
+    orientation.w = cos(half_yaw)
 
 
 class AsyncBleWorker:
@@ -106,14 +123,18 @@ class WorkerTransport:
 def main(argv: Sequence[str] | None = None) -> int:
     try:
         import rclpy
-        from geometry_msgs.msg import Twist
+        from geometry_msgs.msg import TransformStamped, Twist
+        from nav_msgs.msg import Odometry
         from rclpy.executors import ExternalShutdownException
         from rclpy.node import Node
-        from std_msgs.msg import String
+        from std_msgs.msg import Bool, String
+        from std_srvs.srv import Trigger
+        from tf2_ros import TransformBroadcaster
     except ImportError as exc:
         print(
             "error: ROS2 Python packages are required. Source a ROS2 environment "
-            "that provides rclpy, geometry_msgs, and std_msgs.",
+            "that provides rclpy, geometry_msgs, nav_msgs, std_msgs, std_srvs, "
+            "and tf2_ros.",
             file=sys.stderr,
         )
         print(f"detail: {exc}", file=sys.stderr)
@@ -129,6 +150,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             self.declare_parameter("wheel_base_m", DEFAULT_WHEEL_BASE_M)
             self.declare_parameter("max_linear_mps", DEFAULT_MAX_LINEAR_MPS)
             self.declare_parameter("cmd_timeout_s", DEFAULT_CMD_TIMEOUT_S)
+            self.declare_parameter("cmd_vel_topic", "cmd_vel")
+            self.declare_parameter("driver_state_topic", "driver_state")
+            self.declare_parameter("emergency_stop_topic", "emergency_stop")
+            self.declare_parameter("clear_emergency_stop_service", "clear_emergency_stop")
+            self.declare_parameter("odom_topic", "odom")
+            self.declare_parameter("odom_frame_id", "odom")
+            self.declare_parameter("base_frame_id", "base_footprint")
+            self.declare_parameter("odom_mode", ODOM_MODE_OPEN_LOOP_COMMANDED)
+            self.declare_parameter("publish_odom", True)
+            self.declare_parameter("publish_tf", True)
+            self.declare_parameter("odom_publish_hz", DEFAULT_ODOM_PUBLISH_HZ)
+            self.declare_parameter("steering_yaw_rate_radps", 0.0)
 
             address = self.get_parameter("address").value or None
             name_hint = str(self.get_parameter("name_hint").value)
@@ -137,9 +170,45 @@ def main(argv: Sequence[str] | None = None) -> int:
             wheel_base_m = float(self.get_parameter("wheel_base_m").value)
             max_linear_mps = float(self.get_parameter("max_linear_mps").value)
             cmd_timeout_s = float(self.get_parameter("cmd_timeout_s").value)
+            cmd_vel_topic = str(self.get_parameter("cmd_vel_topic").value)
+            driver_state_topic = str(self.get_parameter("driver_state_topic").value)
+            emergency_stop_topic = str(
+                self.get_parameter("emergency_stop_topic").value
+            )
+            clear_emergency_stop_service = str(
+                self.get_parameter("clear_emergency_stop_service").value
+            )
+            odom_topic = str(self.get_parameter("odom_topic").value)
+            self.odom_frame_id = str(self.get_parameter("odom_frame_id").value)
+            self.base_frame_id = str(self.get_parameter("base_frame_id").value)
+            odom_mode = str(self.get_parameter("odom_mode").value)
+            publish_odom = bool(self.get_parameter("publish_odom").value)
+            publish_tf = bool(self.get_parameter("publish_tf").value)
+            odom_publish_hz = float(self.get_parameter("odom_publish_hz").value)
+            steering_yaw_rate_radps = float(
+                self.get_parameter("steering_yaw_rate_radps").value
+            )
 
-            self.state_pub = self.create_publisher(String, "/driver_state", 10)
-            self.create_subscription(Twist, "/cmd_vel", self.on_cmd_vel, 10)
+            if odom_mode != ODOM_MODE_OPEN_LOOP_COMMANDED:
+                raise ValueError(
+                    f"odom_mode must be {ODOM_MODE_OPEN_LOOP_COMMANDED!r}"
+                )
+            if odom_publish_hz <= 0:
+                raise ValueError("odom_publish_hz must be greater than zero")
+
+            self.state_pub = self.create_publisher(String, driver_state_topic, 10)
+            self.create_subscription(Twist, cmd_vel_topic, self.on_cmd_vel, 10)
+            self.create_subscription(
+                Bool,
+                emergency_stop_topic,
+                self.on_emergency_stop,
+                10,
+            )
+            self.create_service(
+                Trigger,
+                clear_emergency_stop_service,
+                self.on_clear_emergency_stop,
+            )
             self.create_timer(0.1, self.on_watchdog)
 
             self.worker = AsyncBleWorker(
@@ -154,20 +223,73 @@ def main(argv: Sequence[str] | None = None) -> int:
                 max_linear_mps=max_linear_mps,
                 cmd_timeout_s=cmd_timeout_s,
             )
+            self.odom: OpenLoopOdometry | None = None
+            self.odom_pub = None
+            self.tf_broadcaster = None
+            if publish_odom or publish_tf:
+                self.odom = OpenLoopOdometry(
+                    max_linear_mps=max_linear_mps,
+                    steering_yaw_rate_radps=steering_yaw_rate_radps,
+                    initial_time=self.core.now(),
+                )
+                if publish_odom:
+                    self.odom_pub = self.create_publisher(Odometry, odom_topic, 10)
+                if publish_tf:
+                    self.tf_broadcaster = TransformBroadcaster(self)
+                self.create_timer(1.0 / odom_publish_hz, self.on_odom_timer)
+
             self.track_future(self.worker.connect(), "connect")
             self.publish_state("connecting")
 
         def on_cmd_vel(self, msg: object) -> None:
+            timestamp = self.core.now()
             event = self.core.handle_cmd_vel(
                 float(msg.linear.x),
                 float(msg.angular.z),
+                now=timestamp,
             )
+            self.update_odom(event, timestamp)
             self.publish_event(event)
 
+        def on_emergency_stop(self, msg: object) -> None:
+            if not bool(msg.data):
+                self.publish_state("emergency_stop_ignored use_clear_service=true")
+                return
+
+            timestamp = self.core.now()
+            event = self.core.emergency_stop()
+            self.update_odom(event, timestamp)
+            self.publish_event(event)
+
+        def on_clear_emergency_stop(self, request: object, response: object) -> object:
+            was_stopped = self.core.clear_emergency_stop()
+            response.success = True
+            if was_stopped:
+                response.message = "emergency_stop_cleared"
+                self.publish_state("emergency_stop_cleared")
+            else:
+                response.message = "emergency_stop_was_not_active"
+                self.publish_state("emergency_stop_was_not_active")
+            return response
+
         def on_watchdog(self) -> None:
-            event = self.core.watchdog()
+            timestamp = self.core.now()
+            event = self.core.watchdog(now=timestamp)
             if event is not None:
+                self.update_odom(event, timestamp)
                 self.publish_event(event)
+
+        def on_odom_timer(self) -> None:
+            if self.odom is None:
+                return
+
+            state = self.odom.advance(self.core.now())
+            self.publish_odom_state(state)
+
+        def update_odom(self, event: DriverEvent, timestamp: float) -> None:
+            if self.odom is None:
+                return
+            self.odom.handle_event(event, timestamp=timestamp)
 
         def publish_event(self, event: DriverEvent) -> None:
             if isinstance(event.operation, Future):
@@ -191,6 +313,40 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         def publish_state(self, message: str) -> None:
             self.state_pub.publish(String(data=message))
+
+        def publish_odom_state(self, state: OdomState) -> None:
+            stamp = self.get_clock().now().to_msg()
+            if self.odom_pub is not None:
+                self.odom_pub.publish(self.build_odom_msg(state, stamp))
+            if self.tf_broadcaster is not None:
+                self.tf_broadcaster.sendTransform(self.build_odom_tf(state, stamp))
+
+        def build_odom_msg(self, state: OdomState, stamp: object) -> object:
+            msg = Odometry()
+            msg.header.stamp = stamp
+            msg.header.frame_id = self.odom_frame_id
+            msg.child_frame_id = self.base_frame_id
+            msg.pose.pose.position.x = state.pose.x
+            msg.pose.pose.position.y = state.pose.y
+            msg.pose.pose.position.z = 0.0
+            set_yaw_orientation(msg.pose.pose.orientation, state.pose.yaw)
+            msg.pose.covariance = list(OPEN_LOOP_POSE_COVARIANCE)
+            msg.twist.twist.linear.x = state.twist.linear_x
+            msg.twist.twist.linear.y = 0.0
+            msg.twist.twist.angular.z = state.twist.angular_z
+            msg.twist.covariance = list(OPEN_LOOP_TWIST_COVARIANCE)
+            return msg
+
+        def build_odom_tf(self, state: OdomState, stamp: object) -> object:
+            transform = TransformStamped()
+            transform.header.stamp = stamp
+            transform.header.frame_id = self.odom_frame_id
+            transform.child_frame_id = self.base_frame_id
+            transform.transform.translation.x = state.pose.x
+            transform.transform.translation.y = state.pose.y
+            transform.transform.translation.z = 0.0
+            set_yaw_orientation(transform.transform.rotation, state.pose.yaw)
+            return transform
 
         def close(self) -> None:
             self.worker.shutdown()

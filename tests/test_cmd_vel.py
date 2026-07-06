@@ -24,6 +24,13 @@ class CmdVelTest(unittest.TestCase):
         self.assertEqual(command.reason, "drive")
         self.assertEqual((command.left, command.right), (300, 300))
 
+    def test_forward_command_above_limit_is_clamped_and_reported(self) -> None:
+        command = cmd_vel_to_drive(2.0, 0.0, max_linear_mps=1.0, max_speed=100)
+
+        self.assertFalse(command.should_stop)
+        self.assertEqual(command.reason, "drive_limited")
+        self.assertEqual((command.left, command.right), (100, 100))
+
     def test_positive_angular_command_maps_to_left_steer_drive(self) -> None:
         command = cmd_vel_to_drive(
             0.5,
@@ -51,6 +58,14 @@ class CmdVelTest(unittest.TestCase):
         self.assertEqual(command.reason, "steer_drive")
         self.assertEqual(command.steering, "right")
         self.assertEqual((command.left, command.right), (50, 50))
+
+    def test_angular_command_above_linear_limit_is_clamped_and_reported(self) -> None:
+        command = cmd_vel_to_drive(2.0, 1.0, max_linear_mps=1.0, max_speed=100)
+
+        self.assertFalse(command.should_stop)
+        self.assertEqual(command.reason, "steer_drive_limited")
+        self.assertEqual(command.steering, "left")
+        self.assertEqual((command.left, command.right), (100, 100))
 
     def test_pivot_command_maps_to_stationary_steering(self) -> None:
         command = cmd_vel_to_drive(0.0, 1.0)

@@ -1,0 +1,1 @@
+/tmp/altino-bringup-estop-capture/altino_bringup_estop_rviz.png PNG 1600x1000 1600x1000+0+0 8-bit sRGB 95416B 0.000u 0:00.000

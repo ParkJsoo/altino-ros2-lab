@@ -1,0 +1,1 @@
+/tmp/altino-rviz-capture/altino_rviz_clean.png PNG 1600x1000 1600x1000+0+0 8-bit sRGB 83730B 0.000u 0:00.001
