@@ -6,10 +6,8 @@ Altino ROS2 Lab is a mobile-robot portfolio project for Altino Lite. It builds a
 verified BLE driver, a ROS2 `/cmd_vel` bridge, watchdog and e-stop safety paths,
 open-loop odom/TF, and a pre-sensor RViz bringup stack.
 
-This project is intentionally separate from MotionBrain:
-
-- MotionBrain: manipulator, STM32 firmware, actuator control, embedded evidence.
-- Altino ROS2 Lab: mobile base, BLE transport, ROS2 integration, TF/RViz evidence.
+This repository focuses on Altino Lite mobile-base BLE control, ROS2
+integration, safety behavior, and TF/RViz evidence.
 
 ## Current Status
 
@@ -41,7 +39,7 @@ robot_state_publisher
 
 ## Safety and Limits
 
-- Stop MotionBrain before Altino hardware tests on the shared Raspberry Pi.
+- Stop any conflicting services before Altino hardware tests on a shared Raspberry Pi.
 - Keep clear floor space; movement commands are real BLE writes to the robot.
 - Watchdog stop, zero-command stop, and latched e-stop are implemented.
 - Reverse commands are rejected until reverse behavior is physically verified.
@@ -114,21 +112,16 @@ ros2 topic pub --once /emergency_stop std_msgs/msg/Bool "{data: true}"
 ros2 service call /clear_emergency_stop std_srvs/srv/Trigger "{}"
 ```
 
-## Raspberry Pi Mode Switching
+## Raspberry Pi Operation
 
-The current setup shares one Raspberry Pi with MotionBrain. Stop MotionBrain
-before Altino hardware tests:
+Before Altino hardware tests, stop any existing robot services that could
+conflict with BLE, ROS2, or hardware access, then run the preflight check:
 
 ```sh
-tools/raspi/motionbrain-off-for-altino.sh
 tools/raspi/altino-preflight.sh
 ```
 
-Restore MotionBrain afterward:
-
-```sh
-tools/raspi/motionbrain-on.sh
-```
+Keep local Pi service switching details in `docs/pi_bringup_checklist.md`.
 
 ## Evidence
 

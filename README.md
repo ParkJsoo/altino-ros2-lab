@@ -6,10 +6,8 @@ Altino ROS2 Lab은 Altino Lite를 대상으로 한 모바일 로봇 포트폴리
 프로젝트입니다. 검증된 BLE 드라이버, ROS2 `/cmd_vel` 브리지, watchdog/e-stop
 안전 경로, open-loop odom/TF, 센서 장착 전 RViz bringup을 다룹니다.
 
-이 프로젝트는 MotionBrain과 역할을 분리합니다.
-
-- MotionBrain: 매니퓰레이터, STM32 펌웨어, 액추에이터 제어, 임베디드 증거.
-- Altino ROS2 Lab: 모바일 베이스, BLE 전송, ROS2 통합, TF/RViz 증거.
+이 저장소는 Altino Lite 모바일 베이스의 BLE 제어, ROS2 통합, 안전 동작,
+TF/RViz 증거에 집중합니다.
 
 ## 현재 상태
 
@@ -41,7 +39,7 @@ robot_state_publisher
 
 ## 안전 및 한계
 
-- 공유 Raspberry Pi에서 Altino 하드웨어 테스트 전에는 MotionBrain을 중지합니다.
+- 공유 Raspberry Pi에서 Altino 하드웨어 테스트 전에는 충돌할 수 있는 기존 서비스를 중지합니다.
 - 실제 BLE 명령이 로봇에 전달되므로 주변 바닥 공간을 비웁니다.
 - watchdog stop, zero-command stop, latched e-stop이 구현되어 있습니다.
 - reverse 명령은 실제 동작 검증 전까지 거부합니다.
@@ -114,21 +112,16 @@ ros2 topic pub --once /emergency_stop std_msgs/msg/Bool "{data: true}"
 ros2 service call /clear_emergency_stop std_srvs/srv/Trigger "{}"
 ```
 
-## Raspberry Pi 모드 전환
+## Raspberry Pi 운영
 
-현재 Raspberry Pi 하나를 MotionBrain과 공유합니다. Altino 하드웨어 테스트 전에는
-MotionBrain을 중지합니다.
+Altino 하드웨어 테스트 전에는 Pi에서 충돌할 수 있는 기존 로봇 서비스를
+중지하고 preflight를 확인합니다.
 
 ```sh
-tools/raspi/motionbrain-off-for-altino.sh
 tools/raspi/altino-preflight.sh
 ```
 
-테스트 후 MotionBrain을 복구합니다.
-
-```sh
-tools/raspi/motionbrain-on.sh
-```
+로컬 Pi 서비스 전환 절차는 `docs/pi_bringup_checklist.md`에 정리합니다.
 
 ## Evidence
 
